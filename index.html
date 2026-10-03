@@ -185,12 +185,49 @@ table.data tr.missing td:first-child { color: var(--text-3); }
 
 details.settings summary { cursor: pointer; font-size: 14px; color: var(--text-2); }
 
+/* 사전 지식 */
+.kb-layout { display: grid; grid-template-columns: 240px 1fr; gap: 16px; }
+.kb-list { display: grid; gap: 6px; align-content: start; max-height: 560px; overflow: auto; }
+.kb-item { text-align: left; font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.kb-item small { display: block; color: var(--text-3); font-size: 12px; }
+.kb-item.active { border-color: var(--accent); background: var(--surface-2); }
+.kb-empty { font-size: 13px; color: var(--text-3); padding: 8px 2px; }
+textarea.prose { font-family: inherit; font-size: 14px; min-height: 96px; }
+.kb-preview { font-size: 13px; color: var(--text-2); background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin: -4px 0 12px; white-space: pre-wrap; max-height: 160px; overflow: auto; }
+
+/* 검토 파이프라인 */
+.pipeline { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 12px; }
+.pipeline:empty { display: none; }
+.pipe { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-3); }
+.pipe.run { color: var(--text); border-color: var(--accent); }
+.pipe.done { color: var(--text); }
+.pipe.done::before { content: "✓ "; color: var(--good); }
+.pipe.skip { text-decoration: line-through; }
+.ai-sec-title { font-size: 15px; margin: 20px 0 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+.flag { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+.flag-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.flag-head strong { font-size: 15px; }
+.flag p { margin: 6px 0; font-size: 14px; }
+.flag .meta { font-size: 13px; color: var(--text-2); }
+.sev { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 4px; }
+.sev i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.sev.high i { background: var(--critical); }
+.sev.medium i { background: var(--warning); }
+.sev.low i { background: var(--text-3); }
+.sev.none i { background: var(--good); }
+.review { margin-top: 10px; padding: 12px; border-radius: 8px; background: var(--surface-2); font-size: 14px; }
+.review .verdict { font-weight: 700; }
+.review ul { margin: 6px 0; padding-left: 20px; }
+.review-sum { font-size: 14px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); margin-bottom: 12px; }
+
 @media (max-width: 640px) {
   .score-wrap { grid-template-columns: 1fr; }
   .charts { grid-template-columns: 1fr; }
+  .kb-layout { grid-template-columns: 1fr; }
+  .kb-list { max-height: 200px; }
 }
 @media print {
-  .no-print, #importCard, #reviewCard, .steps, header.top .top-actions { display: none !important; }
+  .no-print, #importCard, #reviewCard, #kbCard, .steps, header.top .top-actions { display: none !important; }
   body { background: #fff; }
   .card, .chart-card, .kpi { break-inside: avoid; box-shadow: none; }
 }
@@ -204,6 +241,7 @@ details.settings summary { cursor: pointer; font-size: 14px; color: var(--text-2
       <p>가져오기 → 항목 확인 → 비율·AI 분석 → 대시보드</p>
     </div>
     <div class="top-actions">
+      <button class="btn sm" id="kbToggle" type="button">회사별 사전 지식</button>
       <button class="btn sm" id="themeBtn" type="button">테마 전환</button>
     </div>
   </header>
@@ -213,6 +251,42 @@ details.settings summary { cursor: pointer; font-size: 14px; color: var(--text-2
     <div class="step" data-step="2"><b>2</b>항목 확인·수정</div>
     <div class="step" data-step="3"><b>3</b>분석 결과</div>
   </div>
+
+  <!-- 회사별 사전 지식 -->
+  <section class="card hidden" id="kbCard">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h2>회사별 사전 지식</h2>
+        <p class="sub">AI 분석 때 함께 전달할 회사 정보를 회사별로 정리합니다. 분석 중인 회사명과 회사명·별칭이 맞으면 자동으로 연결됩니다.</p>
+      </div>
+      <div class="row">
+        <button class="btn sm" id="kbNew" type="button">새 회사</button>
+        <button class="btn sm" id="kbImport" type="button">JSON 가져오기</button>
+        <button class="btn sm" id="kbExport" type="button">JSON 내보내기</button>
+        <input type="file" id="kbFile" accept=".json" class="hidden">
+      </div>
+    </div>
+    <div class="kb-layout">
+      <div class="kb-list" id="kbList"></div>
+      <div id="kbEditor">
+        <div class="grid2">
+          <label class="field"><span>회사명 *</span><input type="text" id="kbName" placeholder="예: 샘플전자(주)"></label>
+          <label class="field"><span>별칭 (쉼표로 구분, 자동 연결용)</span><input type="text" id="kbAliases" placeholder="예: 샘플전자, SAMPLE Electronics"></label>
+          <label class="field"><span>업종</span><input type="text" id="kbIndustry" placeholder="예: 전자부품 제조"></label>
+        </div>
+        <label class="field"><span>사업 개요</span><textarea class="prose" id="kbOverview" placeholder="주요 제품·고객·사업 구조, 매출 구성 등"></textarea></label>
+        <label class="field"><span>분석 시 참고사항</span><textarea class="prose" id="kbNotes" placeholder="회계정책 변경, 일회성 손익, 인수합병, 계절성, 업황 등 숫자만 봐서는 알기 어려운 사정"></textarea></label>
+        <label class="field"><span>업종·비교 기준</span><textarea class="prose" id="kbBench" placeholder="예: 업종 특성상 부채비율 200%까지 정상 범위. 경쟁사 영업이익률 8~12%."></textarea></label>
+        <label class="field"><span>중점 점검 포인트</span><textarea class="prose" id="kbWatch" placeholder="예: 매출채권 회수기간, 특정 고객 의존도, 차입금 만기 구조"></textarea></label>
+        <div class="row">
+          <button class="btn primary" id="kbSave" type="button">저장</button>
+          <button class="btn" id="kbDelete" type="button">삭제</button>
+          <span class="hint" style="margin:0" id="kbMsg"></span>
+        </div>
+      </div>
+    </div>
+    <p class="hint">저장 위치는 이 브라우저(localStorage)입니다. 다른 기기·사람과 함께 쓰려면 JSON으로 내보내 저장소의 <code>knowledge/companies.json</code>에 넣으세요. 페이지가 열릴 때 그 파일도 자동으로 불러옵니다(같은 회사가 브라우저에도 있으면 브라우저 쪽이 우선).</p>
+  </section>
 
   <!-- STEP 1: IMPORT -->
   <section class="card" id="importCard">
@@ -288,8 +362,15 @@ details.settings summary { cursor: pointer; font-size: 14px; color: var(--text-2
       <summary>AI 설정 (Claude API)</summary>
       <div class="grid2" style="margin-top:12px">
         <label class="field"><span>Anthropic API 키</span><input type="password" id="apiKey" placeholder="sk-ant-..."></label>
-        <label class="field"><span>모델</span>
+        <label class="field"><span>1차 검토 모델</span>
           <select id="modelSel">
+            <option value="claude-opus-5-5">Claude Opus 5.5</option>
+            <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
+            <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+          </select>
+        </label>
+        <label class="field"><span>2차 검토 에이전트 모델</span>
+          <select id="reviewModelSel">
             <option value="claude-opus-5-5">Claude Opus 5.5</option>
             <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
             <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
@@ -373,16 +454,31 @@ details.settings summary { cursor: pointer; font-size: 14px; color: var(--text-2
     <div class="card">
       <div class="row" style="justify-content:space-between">
         <div>
-          <h2>AI 분석 리포트</h2>
-          <p class="sub">재무 데이터와 계산된 비율을 Claude에 보내 서술형 분석을 받습니다.</p>
+          <h2>AI 분석 (1차 검토 → 2차 검토)</h2>
+          <p class="sub">1차 검토자가 리포트를 쓰고 이상·주의 사항을 골라내면, 2차 검토 에이전트가 항목마다 데이터와 사전 지식으로 다시 검증합니다.</p>
         </div>
         <div class="row no-print">
           <button class="btn primary" id="aiAnalyzeBtn" type="button">AI 분석 실행</button>
         </div>
       </div>
-      <label class="field no-print"><span>추가 질문·관점 (선택)</span><input type="text" id="aiFocus" placeholder="예: 경쟁사 대비 투자 매력, 배당 여력, 단기 유동성 위험 중심으로"></label>
+      <div class="grid2 no-print">
+        <label class="field"><span>적용할 사전 지식</span><select id="kbSelect"></select></label>
+        <label class="field"><span>추가 질문·관점 (선택)</span><input type="text" id="aiFocus" placeholder="예: 배당 여력, 단기 유동성 위험 중심으로"></label>
+      </div>
+      <div class="kb-preview hidden" id="kbPreview"></div>
+      <label class="row no-print" style="font-size:13px;color:var(--text-2);margin-bottom:8px"><input type="checkbox" id="autoReview" checked> 이상·주의 사항이 나오면 2차 검토를 자동으로 실행</label>
+      <div class="pipeline" id="pipeline"></div>
       <div id="aiStatus"></div>
+      <h3 class="ai-sec-title" style="border-top:0;padding-top:0;margin-top:8px">1차 검토 리포트</h3>
       <div class="ai-out" id="aiOut"></div>
+      <div id="flagSection" class="hidden" style="border-top:1px solid var(--border);margin-top:20px;padding-top:12px">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <h3 class="ai-sec-title" style="flex:1;border-top:0;padding-top:0;margin:0">이상·주의 사항과 2차 검토</h3>
+          <button class="btn sm no-print" id="runReviewBtn" type="button">2차 검토 실행</button>
+        </div>
+        <div id="reviewSummary"></div>
+        <div id="flagList"></div>
+      </div>
     </div>
 
     <div class="card">
@@ -1046,6 +1142,7 @@ function renderDashboard() {
   $('#dataTable').innerHTML = dt + '</tbody></table>';
 
   renderCharts();
+  refreshKbSelect(fs.company);
   $('#dashboard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -1099,10 +1196,11 @@ function aiConfig() {
   const model = $('#modelSel').value;
   if ($('#rememberKey').checked) { store.set('fsa.key', key); } else { store.del('fsa.key'); }
   store.set('fsa.model', model);
-  return { key, model };
+  store.set('fsa.reviewModel', $('#reviewModelSel').value);
+  return { key, model, reviewModel: $('#reviewModelSel').value };
 }
 
-function buildRequest(model, body) {
+function buildRequest(model, body, effort = 'medium') {
   const headers = {
     'content-type': 'application/json',
     'anthropic-version': '2023-06-01',
@@ -1113,18 +1211,18 @@ function buildRequest(model, body) {
     // 안전 분류기로 거절되면 서버가 권장 모델로 자동 재시도
     headers['anthropic-beta'] = 'server-side-fallback-2026-07-01';
     req.fallbacks = 'default';
-    req.output_config = { ...(req.output_config || {}), effort: 'medium' };
+    req.output_config = { ...(req.output_config || {}), effort };
   }
   return { headers, req };
 }
 
-async function claudeJSON({ key, model }, { system, content, schema }) {
+async function claudeJSON({ key, model }, { system, content, schema, effort }) {
   const { headers, req } = buildRequest(model, {
     max_tokens: 16000,
     system,
     messages: [{ role: 'user', content }],
     output_config: { format: { type: 'json_schema', schema } },
-  });
+  }, effort);
   headers['x-api-key'] = key;
   const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers, body: JSON.stringify(req) });
   const data = await res.json();
@@ -1227,23 +1325,116 @@ ${keyList}`;
   }
 }
 
+/* ---------- AI 분석: 1차 검토 → 이슈 추출 → 2차 검토 ---------- */
+const SEV_LABEL = { high: '높음', medium: '보통', low: '낮음', none: '문제 없음' };
+const VERDICT_LABEL = { confirmed: '문제 확인', partial: '부분 확인', not_an_issue: '문제 아님', insufficient_data: '자료 부족' };
+
+const FLAG_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['flags'],
+  properties: {
+    flags: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'severity', 'category', 'description', 'evidence', 'review_question'],
+        properties: {
+          title: { type: 'string' },
+          severity: { type: 'string', enum: ['high', 'medium', 'low'] },
+          category: { type: 'string', enum: ['수익성', '성장성', '안정성', '활동성', '현금흐름', '데이터 정합성', '사전 지식 관련', '기타'] },
+          description: { type: 'string' },
+          evidence: { type: 'string' },
+          review_question: { type: 'string' },
+        },
+      },
+    },
+  },
+};
+
+const REVIEW_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['verdict', 'adjusted_severity', 'analysis', 'evidence_checked', 'knowledge_used', 'follow_up'],
+  properties: {
+    verdict: { type: 'string', enum: ['confirmed', 'partial', 'not_an_issue', 'insufficient_data'] },
+    adjusted_severity: { type: 'string', enum: ['high', 'medium', 'low', 'none'] },
+    analysis: { type: 'string' },
+    evidence_checked: { type: 'array', items: { type: 'string' } },
+    knowledge_used: { type: 'string' },
+    follow_up: { type: 'array', items: { type: 'string' } },
+  },
+};
+
+const MAX_FLAGS = 6;
+const SEV_ORDER = { high: 0, medium: 1, low: 2 };
+
+// 숫자 자체의 정합성 점검 (1차 검토자에게 단서로 제공)
+function dataChecks(fs) {
+  const I = fs.items, out = [];
+  const near = (a, b) => Math.abs(a - b) <= Math.max(Math.abs(a), Math.abs(b)) * 0.01;
+  fs.periods.forEach((p, i) => {
+    const g = k => I[k][i];
+    if (g('totalAssets') != null && g('totalLiabilities') != null && g('equity') != null && !near(g('totalAssets'), g('totalLiabilities') + g('equity')))
+      out.push(`${p}: 자산총계(${fmtAmt(g('totalAssets'))}) ≠ 부채총계+자본총계(${fmtAmt(g('totalLiabilities') + g('equity'))})`);
+    if (g('totalAssets') != null && g('currentAssets') != null && g('nonCurrentAssets') != null && !near(g('totalAssets'), g('currentAssets') + g('nonCurrentAssets')))
+      out.push(`${p}: 자산총계 ≠ 유동자산+비유동자산`);
+    if (g('revenue') != null && g('cogs') != null && g('grossProfit') != null && !near(g('grossProfit'), g('revenue') - g('cogs')))
+      out.push(`${p}: 매출총이익 ≠ 매출액−매출원가`);
+    if (g('equity') != null && g('equity') < 0) out.push(`${p}: 자본총계가 음수 (자본잠식)`);
+    if (g('revenue') != null && g('revenue') <= 0) out.push(`${p}: 매출액이 0 이하`);
+  });
+  return out;
+}
+
+function aiPayload() {
+  const fs = state.fs, A = state.analysis;
+  return {
+    company: fs.company, unit: fs.unit, periods: fs.periods,
+    statements: Object.fromEntries(ITEMS.filter(i => fs.items[i.key].some(v => v != null)).map(i => [i.label, fs.items[i.key]])),
+    ratios: Object.fromEntries(A.ratios.map(r => [r.name, r.values.map(v => (v == null ? null : +v.toFixed(2)))])),
+    rule_based_grades_latest: Object.fromEntries(A.ratios.filter(r => r.grade).map(r => [r.name, GRADE_LABEL[r.grade]])),
+    rule_based_score: { total: A.score, grade: A.grade, by_category: Object.fromEntries(A.catScores.map(c => [c.cat, c.score])) },
+    data_checks: dataChecks(fs),
+  };
+}
+
+function knowledgeBlock(text) {
+  return text
+    ? `\n\n<company_knowledge>\n${text}\n</company_knowledge>\n위 company_knowledge는 사용자가 이 회사에 대해 직접 정리한 사전 지식입니다. 분석에 반영하되, 재무 데이터와 맞지 않는 내용이 있으면 그 사실을 밝히세요.`
+    : '\n\n(이 회사에 대해 사용자가 정리한 사전 지식은 없습니다.)';
+}
+
+function setPipe(stage, status) {
+  const el = $(`#pipeline .pipe[data-stage="${stage}"]`);
+  if (el) el.className = `pipe ${status}`;
+}
+const mdHtml = md => DOMPurify.sanitize(marked.parse(md || ''), { FORBID_TAGS: ['img', 'style'] });
+
 async function aiAnalyze() {
   const cfg = aiConfig();
   const stEl = $('#aiStatus'), out = $('#aiOut');
   if (!cfg.key) { $('details.settings').open = true; $('#importCard').scrollIntoView({ behavior: 'smooth' }); return setStatus(stEl, '1단계의 “AI 설정”에 Anthropic API 키를 입력하세요.', 'err'); }
-  const fs = state.fs, A = state.analysis;
-  const payload = {
-    company: fs.company, unit: fs.unit, periods: fs.periods,
-    statements: Object.fromEntries(ITEMS.filter(i => fs.items[i.key].some(v => v != null)).map(i => [i.label, fs.items[i.key]])),
-    ratios: Object.fromEntries(A.ratios.map(r => [r.name, r.values.map(v => (v == null ? null : +v.toFixed(2)))])),
-    rule_based_score: { total: A.score, grade: A.grade, by_category: Object.fromEntries(A.catScores.map(c => [c.cat, c.score])) },
-  };
+  const fs = state.fs;
+  const kbEntry = kb.list.find(x => x.id === $('#kbSelect').value) || null;
+  const kbText = kbToText(kbEntry);
+  const payload = aiPayload();
   const focus = $('#aiFocus').value.trim();
+  state.aiKnowledge = kbEntry ? kbPublic(kbEntry) : null;
+  state.aiFlags = []; state.aiReviews = {}; state.aiReport = '';
+  state.aiCtx = { payload, kbText, cfg };
+
+  $('#pipeline').innerHTML = [['report', '① 1차 검토 리포트'], ['flags', '② 이상·주의 사항 추출'], ['review', '③ 2차 검토 에이전트']]
+    .map(([k, l]) => `<span class="pipe" data-stage="${k}">${l}</span>`).join('');
+  $('#flagSection').classList.add('hidden');
+  $('#flagList').innerHTML = ''; $('#reviewSummary').innerHTML = '';
+
   const prompt = `다음은 ${fs.company}의 재무제표 요약과 계산된 재무비율입니다 (JSON).
 
 <financials>
 ${JSON.stringify(payload, null, 2)}
-</financials>
+</financials>${knowledgeBlock(kbText)}
 
 이 데이터를 바탕으로 한국어 재무 분석 리포트를 마크다운으로 작성하세요. 구성:
 1. **한 줄 요약**
@@ -1254,34 +1445,293 @@ ${JSON.stringify(payload, null, 2)}
 6. **리스크 요인과 확인할 점** — 주석·사업보고서에서 추가로 봐야 할 항목
 7. **종합 의견** — 강점 3개, 약점 3개
 
-규칙: 숫자를 인용할 때는 데이터에 있는 값만 쓰고 기간을 명시하세요. 데이터가 없는 부분은 "자료 없음"이라고 쓰세요. 업종 정보가 없으므로 업종별 기준이 다를 수 있음을 감안해 단정하지 마세요. 투자 권유가 아닌 참고용 분석임을 마지막에 한 줄로 밝히세요.${focus ? `\n\n사용자가 특히 궁금해하는 관점: ${focus}` : ''}`;
+규칙: 숫자를 인용할 때는 데이터에 있는 값만 쓰고 기간을 명시하세요. 데이터가 없는 부분은 "자료 없음"이라고 쓰세요. 사전 지식에 업종·비교 기준이 있으면 일반 기준 대신 그것으로 평가하고, 없으면 업종별 기준이 다를 수 있음을 감안해 단정하지 마세요. data_checks에 항목이 있으면 데이터 오류 가능성을 언급하세요. 투자 권유가 아닌 참고용 분석임을 마지막에 한 줄로 밝히세요.${focus ? `\n\n사용자가 특히 궁금해하는 관점: ${focus}` : ''}`;
 
   const btn = $('#aiAnalyzeBtn');
   btn.disabled = true;
   out.innerHTML = '';
-  setStatus(stEl, `<span class="spinner"></span> ${esc(cfg.model)} 분석 중…`);
   let md = '', pending = false;
-  const paint = () => { pending = false; out.innerHTML = DOMPurify.sanitize(marked.parse(md), { FORBID_TAGS: ['img', 'style'] }); };
+  const paint = () => { pending = false; out.innerHTML = mdHtml(md); };
   try {
+    // ① 1차 검토 리포트 (스트리밍)
+    setPipe('report', 'run');
+    setStatus(stEl, `<span class="spinner"></span> 1차 검토자(${esc(cfg.model)})가 리포트를 작성하는 중…${kbEntry ? ` · 사전 지식 “${esc(kbEntry.name)}” 적용` : ''}`);
     const stop = await claudeStream(cfg, {
-      system: '당신은 기업 재무제표를 분석하는 공인회계사이자 애널리스트입니다. 근거 있는 숫자로 간결하고 구조적으로 설명합니다.',
+      system: '당신은 기업 재무제표를 분석하는 1차 검토자(공인회계사이자 애널리스트)입니다. 근거 있는 숫자로 간결하고 구조적으로 설명합니다.',
       content: prompt,
       onText: t => { md += t; if (!pending) { pending = true; requestAnimationFrame(paint); } },
     });
     paint();
-    if (stop === 'refusal') setStatus(stEl, '모델이 요청을 거절했습니다. 다른 모델로 다시 시도해 보세요.', 'err');
-    else if (stop === 'max_tokens') setStatus(stEl, '응답이 길이 제한으로 잘렸습니다.', 'err');
-    else setStatus(stEl, '');
     state.aiReport = md;
+    if (stop === 'refusal') throw new Error('모델이 요청을 거절했습니다. 다른 모델로 다시 시도해 보세요.');
+    if (stop === 'max_tokens') throw new Error('리포트가 길이 제한으로 잘렸습니다.');
+    setPipe('report', 'done');
+
+    // ② 1차 검토자가 추가 검토가 필요한 항목을 골라냄 (구조화 출력)
+    setPipe('flags', 'run');
+    setStatus(stEl, '<span class="spinner"></span> 1차 검토자가 이상·주의 사항을 정리하는 중…');
+    const flagOut = await claudeJSON(cfg, {
+      system: '당신은 기업 재무제표를 분석한 1차 검토자입니다. 자신이 쓴 리포트에서 독립적인 2차 검토가 필요한 항목을 골라 넘깁니다.',
+      content: `<financials>\n${JSON.stringify(payload, null, 2)}\n</financials>${knowledgeBlock(kbText)}\n\n<first_review_report>\n${md}\n</first_review_report>\n\n위 데이터와 리포트를 바탕으로, 2차 검토자가 추가로 검증해야 할 이상 징후·주의 사례를 최대 ${MAX_FLAGS}개 고르세요.\n- 포함 대상: 급격한 추세 변화, 일반 기준이나 사전 지식의 기준을 벗어난 비율, 이익과 현금흐름의 괴리, 운전자본 이상, data_checks의 정합성 문제, 사전 지식과 데이터의 충돌.\n- 단순히 양호한 항목이나 리포트에서 이미 충분히 설명되어 검증할 것이 없는 항목은 제외하세요. 해당이 없으면 빈 배열을 반환하세요.\n- evidence에는 근거 숫자와 기간을, review_question에는 2차 검토자가 확인해야 할 구체적인 질문을 쓰세요.`,
+      schema: FLAG_SCHEMA,
+    });
+    state.aiFlags = (flagOut.flags || []).sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]).slice(0, MAX_FLAGS)
+      .map((f, i) => ({ ...f, id: `F${i + 1}` }));
+    setPipe('flags', 'done');
+    renderFlags();
+
+    if (!state.aiFlags.length) {
+      setPipe('review', 'skip');
+      setStatus(stEl, '1차 검토에서 추가 검토가 필요한 이상·주의 사항이 나오지 않아 2차 검토를 건너뛰었습니다.', 'ok');
+    } else if ($('#autoReview').checked) {
+      await runSecondReview();
+    } else {
+      setStatus(stEl, `이상·주의 사항 ${state.aiFlags.length}건을 찾았습니다. “2차 검토 실행”을 누르면 검토 에이전트가 항목별로 검증합니다.`, 'ok');
+    }
   } catch (e) {
+    $$('#pipeline .pipe.run').forEach(el => { el.className = 'pipe'; });
     setStatus(stEl, `AI 분석 실패: ${esc(e.message)}`, 'err');
   } finally {
     btn.disabled = false;
   }
 }
 
+async function reviewOneFlag(flag) {
+  const { payload, kbText } = state.aiCtx;
+  const cfg = aiConfig();
+  return claudeJSON({ key: cfg.key, model: cfg.reviewModel }, {
+    system: '당신은 독립적인 2차 검토 에이전트입니다. 1차 검토자가 넘긴 이상·주의 사항 하나를 맡아, 1차 검토자의 판단을 그대로 받아들이지 말고 재무 데이터와 사전 지식으로 직접 검증합니다. 데이터로 확인할 수 없는 것은 확인할 수 없다고 말합니다.',
+    content: `<financials>\n${JSON.stringify(payload, null, 2)}\n</financials>${knowledgeBlock(kbText)}\n\n<first_review_report>\n${state.aiReport}\n</first_review_report>\n\n<flag id="${flag.id}">\n제목: ${flag.title}\n분류: ${flag.category}\n1차 판단 심각도: ${SEV_LABEL[flag.severity]}\n내용: ${flag.description}\n근거: ${flag.evidence}\n검토 질문: ${flag.review_question}\n</flag>\n\n이 항목을 검증하세요.\n- verdict: confirmed(문제 맞음) / partial(일부만 맞거나 과장됨) / not_an_issue(문제 아님, 예: 사전 지식으로 설명됨·계산 오류) / insufficient_data(현재 자료로 판단 불가)\n- adjusted_severity: 검증 후 심각도 (문제 아님이면 none)\n- analysis: 한국어 마크다운으로 3~8문장. 직접 다시 계산한 숫자가 있으면 기간과 함께 쓰세요.\n- evidence_checked: 확인한 근거 (숫자·비율 단위로 짧게)\n- knowledge_used: 사전 지식 중 판단에 쓴 내용. 쓰지 않았거나 없으면 "없음"\n- follow_up: 사업보고서·주석 등에서 추가로 확인할 항목 (없으면 빈 배열)`,
+    schema: REVIEW_SCHEMA,
+    effort: 'high',
+  });
+}
+
+async function runSecondReview() {
+  if (!state.aiFlags?.length || !state.aiCtx) return;
+  const cfg = aiConfig();
+  if (!cfg.key) return setStatus($('#aiStatus'), 'API 키가 필요합니다.', 'err');
+  const stEl = $('#aiStatus'), btn = $('#runReviewBtn');
+  btn.disabled = true; $('#aiAnalyzeBtn').disabled = true;
+  state.aiReviews = {};
+  setPipe('review', 'run');
+  setStatus(stEl, `<span class="spinner"></span> 2차 검토 에이전트(${esc(cfg.reviewModel)}) ${state.aiFlags.length}개가 항목별로 검증하는 중…`);
+  state.aiFlags.forEach(f => renderFlagReview(f.id, { pending: true }));
+  await Promise.all(state.aiFlags.map(async f => {
+    try {
+      state.aiReviews[f.id] = await reviewOneFlag(f);
+      renderFlagReview(f.id, state.aiReviews[f.id]);
+    } catch (e) {
+      state.aiReviews[f.id] = { error: e.message };
+      renderFlagReview(f.id, { error: e.message });
+    }
+  }));
+  setPipe('review', 'done');
+  renderReviewSummary();
+  const failed = Object.values(state.aiReviews).filter(r => r.error).length;
+  setStatus(stEl, failed ? `2차 검토 완료 (실패 ${failed}건 — “2차 검토 실행”으로 다시 시도할 수 있습니다).` : '2차 검토를 마쳤습니다.', failed ? 'err' : 'ok');
+  btn.disabled = false; $('#aiAnalyzeBtn').disabled = false;
+}
+
+function renderFlags() {
+  const sec = $('#flagSection');
+  sec.classList.toggle('hidden', !state.aiFlags.length);
+  $('#flagList').innerHTML = state.aiFlags.map(f => `
+    <div class="flag" id="flag-${f.id}">
+      <div class="flag-head">
+        <span class="sev ${f.severity}"><i></i>1차 ${SEV_LABEL[f.severity]}</span>
+        <span class="badge">${esc(f.category)}</span>
+        <strong>${esc(f.title)}</strong>
+      </div>
+      <p>${esc(f.description)}</p>
+      <p class="meta"><b>근거</b> ${esc(f.evidence)}</p>
+      <p class="meta"><b>검토 질문</b> ${esc(f.review_question)}</p>
+      <div class="review-slot"></div>
+    </div>`).join('');
+}
+
+function renderFlagReview(id, r) {
+  const slot = $(`#flag-${id} .review-slot`);
+  if (!slot) return;
+  if (r.pending) { slot.innerHTML = '<div class="review"><span class="spinner"></span> 2차 검토 중…</div>'; return; }
+  if (r.error) { slot.innerHTML = `<div class="review">2차 검토 실패: ${esc(r.error)}</div>`; return; }
+  const list = (title, arr) => (arr && arr.length ? `<div class="meta"><b>${title}</b><ul>${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '');
+  slot.innerHTML = `
+    <div class="review">
+      <div class="flag-head">
+        <span class="verdict">2차 검토: ${VERDICT_LABEL[r.verdict] || esc(r.verdict)}</span>
+        <span class="sev ${r.adjusted_severity}"><i></i>조정 심각도 ${SEV_LABEL[r.adjusted_severity] || esc(r.adjusted_severity)}</span>
+      </div>
+      <div class="ai-out">${mdHtml(r.analysis)}</div>
+      ${list('확인한 근거', r.evidence_checked)}
+      ${r.knowledge_used && r.knowledge_used !== '없음' ? `<p class="meta"><b>사용한 사전 지식</b> ${esc(r.knowledge_used)}</p>` : ''}
+      ${list('추가 확인 항목', r.follow_up)}
+    </div>`;
+}
+
+function renderReviewSummary() {
+  const rs = Object.values(state.aiReviews).filter(r => !r.error);
+  const cnt = v => rs.filter(r => r.verdict === v).length;
+  const high = rs.filter(r => r.adjusted_severity === 'high').length;
+  $('#reviewSummary').innerHTML = `<div class="review-sum">1차 검토 이상·주의 사항 <b>${state.aiFlags.length}건</b> → 2차 검토 결과: 문제 확인 <b>${cnt('confirmed')}</b> · 부분 확인 <b>${cnt('partial')}</b> · 문제 아님 <b>${cnt('not_an_issue')}</b> · 자료 부족 <b>${cnt('insufficient_data')}</b>${high ? ` — 조정 후 심각도 ‘높음’ ${high}건` : ''}</div>`;
+}
+
 function updateAiExtractBtn() {
   $('#aiExtractBtn').disabled = !state.raw || !$('#apiKey').value.trim();
+}
+
+/* ---------- 회사별 사전 지식 ---------- */
+const KB_FIELDS = [
+  ['industry', '업종'],
+  ['overview', '사업 개요'],
+  ['notes', '분석 시 참고사항'],
+  ['bench', '업종·비교 기준'],
+  ['watch', '중점 점검 포인트'],
+];
+const kb = { list: [], editing: null };
+
+function normCompany(s) {
+  return String(s ?? '')
+    .replace(/주식회사|\(주\)|㈜|\(유\)|유한회사|co\.?,?\s*ltd\.?|inc\.?|corp\.?|corporation/gi, '')
+    .replace(/[\s.,·()'"\-_]/g, '')
+    .toLowerCase();
+}
+function kbNames(e) { return [e.name, ...(e.aliases || [])].map(normCompany).filter(Boolean); }
+function kbPublic(e) {
+  const { id, source, ...rest } = e;
+  return rest;
+}
+function kbFromRaw(r, source) {
+  return {
+    id: 'kb_' + Math.random().toString(36).slice(2, 10),
+    name: String(r.name || '').trim(),
+    aliases: (Array.isArray(r.aliases) ? r.aliases : String(r.aliases || '').split(',')).map(a => String(a).trim()).filter(Boolean),
+    industry: String(r.industry || ''), overview: String(r.overview || ''), notes: String(r.notes || ''),
+    bench: String(r.bench || ''), watch: String(r.watch || ''),
+    updatedAt: r.updatedAt || new Date().toISOString(),
+    source,
+  };
+}
+function parseKbFile(text) {
+  const j = JSON.parse(text);
+  const arr = Array.isArray(j) ? j : j.companies;
+  if (!Array.isArray(arr)) throw new Error('companies 배열이 없습니다');
+  return arr.filter(r => r && r.name);
+}
+// overwrite=true: 같은 회사가 있으면 덮어씀 (가져오기). false: 없는 회사만 추가 (저장소 파일)
+function mergeKb(rawList, overwrite, source = 'local') {
+  let n = 0;
+  rawList.forEach(r => {
+    const e = kbFromRaw(r, source);
+    if (!e.name) return;
+    const i = kb.list.findIndex(x => normCompany(x.name) === normCompany(e.name));
+    if (i < 0) { kb.list.push(e); n++; }
+    else if (overwrite) { e.id = kb.list[i].id; kb.list[i] = e; n++; }
+  });
+  kb.list.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  return n;
+}
+function saveKbStore() { store.set('fsa.kb', JSON.stringify(kb.list.filter(e => e.source !== 'repo').map(kbPublic))); }
+
+async function initKb() {
+  try { const raw = store.get('fsa.kb'); if (raw) mergeKb(JSON.parse(raw), true); } catch {}
+  renderKbList(); editKb(kb.list[0]?.id ?? null);
+  if (location.protocol === 'file:') return; // 로컬 파일로 열면 fetch 불가
+  try {
+    const res = await fetch('knowledge/companies.json', { cache: 'no-cache' });
+    if (res.ok) { mergeKb(parseKbFile(await res.text()), false, 'repo'); renderKbList(); refreshKbSelect(); if (!kb.editing && kb.list[0]) editKb(kb.list[0].id); }
+  } catch { /* file:// 로 열었거나 파일 없음 */ }
+}
+
+function matchKb(company) {
+  const n = normCompany(company);
+  if (!n) return null;
+  return kb.list.find(e => kbNames(e).includes(n))
+    || kb.list.find(e => kbNames(e).some(a => a.length >= 2 && (n.includes(a) || a.includes(n))))
+    || null;
+}
+
+function renderKbList() {
+  const el = $('#kbList');
+  if (!kb.list.length) { el.innerHTML = '<div class="kb-empty">아직 등록된 회사가 없습니다. “새 회사”로 추가하세요.</div>'; return; }
+  el.innerHTML = kb.list.map(e => `<button type="button" class="kb-item ${e.id === kb.editing ? 'active' : ''}" data-id="${e.id}">${esc(e.name)}<small>${esc(e.industry || '업종 미입력')}${e.source === 'repo' ? ' · 저장소 파일' : ''}</small></button>`).join('');
+  el.querySelectorAll('.kb-item').forEach(b => b.addEventListener('click', () => editKb(b.dataset.id)));
+}
+
+function editKb(id) {
+  const e = kb.list.find(x => x.id === id) || null;
+  kb.editing = e ? e.id : null;
+  $('#kbName').value = e?.name || '';
+  $('#kbAliases').value = (e?.aliases || []).join(', ');
+  $('#kbIndustry').value = e?.industry || '';
+  $('#kbOverview').value = e?.overview || '';
+  $('#kbNotes').value = e?.notes || '';
+  $('#kbBench').value = e?.bench || '';
+  $('#kbWatch').value = e?.watch || '';
+  $('#kbDelete').disabled = !e;
+  $('#kbMsg').textContent = e ? `마지막 수정: ${new Date(e.updatedAt).toLocaleString('ko-KR')}${e.source === 'repo' ? ' · 저장소 파일에서 불러옴 (저장하면 브라우저에 사본이 생깁니다)' : ''}` : '새 회사를 입력하세요.';
+  renderKbList();
+}
+
+// 분석 중인 회사의 사전 지식을 열고, 없으면 회사명이 채워진 새 항목으로
+function openKbFor(company) {
+  const e = matchKb(company);
+  if (e) return editKb(e.id);
+  editKb(null);
+  $('#kbName').value = company || '';
+}
+
+function saveKb() {
+  const name = $('#kbName').value.trim();
+  if (!name) { $('#kbMsg').textContent = '회사명을 입력하세요.'; return; }
+  const raw = {
+    name, aliases: $('#kbAliases').value, industry: $('#kbIndustry').value.trim(),
+    overview: $('#kbOverview').value.trim(), notes: $('#kbNotes').value.trim(),
+    bench: $('#kbBench').value.trim(), watch: $('#kbWatch').value.trim(),
+  };
+  const dup = kb.list.find(x => normCompany(x.name) === normCompany(name) && x.id !== kb.editing);
+  if (dup) { $('#kbMsg').textContent = `“${dup.name}”이(가) 이미 있습니다.`; return; }
+  const e = kbFromRaw(raw, 'local');
+  const i = kb.list.findIndex(x => x.id === kb.editing);
+  if (i >= 0) { e.id = kb.list[i].id; kb.list[i] = e; } else kb.list.push(e);
+  kb.list.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  saveKbStore();
+  editKb(e.id);
+  refreshKbSelect();
+  $('#kbMsg').textContent = '저장했습니다.';
+}
+
+function deleteKb() {
+  const e = kb.list.find(x => x.id === kb.editing);
+  if (!e || !confirm(`“${e.name}” 사전 지식을 삭제할까요?`)) return;
+  kb.list = kb.list.filter(x => x.id !== e.id);
+  saveKbStore();
+  editKb(kb.list[0]?.id ?? null);
+  refreshKbSelect();
+}
+
+function kbToText(e) {
+  if (!e) return '';
+  const lines = [`회사명: ${e.name}${e.aliases?.length ? ` (별칭: ${e.aliases.join(', ')})` : ''}`];
+  KB_FIELDS.forEach(([k, label]) => { if (e[k]) lines.push(`[${label}]\n${e[k]}`); });
+  return lines.join('\n\n');
+}
+
+// 대시보드의 “적용할 사전 지식” 선택 상자. company가 주어지면 자동 매칭으로 선택
+function refreshKbSelect(company) {
+  const sel = $('#kbSelect');
+  if (!sel) return;
+  const prev = sel.value;
+  const auto = company !== undefined ? matchKb(company) : null;
+  sel.innerHTML = '<option value="">사용 안 함</option>' + kb.list.map(e => `<option value="${e.id}">${esc(e.name)}${auto && auto.id === e.id ? ' (자동 연결)' : ''}</option>`).join('');
+  sel.value = auto ? auto.id : (kb.list.some(e => e.id === prev) ? prev : '');
+  renderKbPreview();
+}
+function renderKbPreview() {
+  const e = kb.list.find(x => x.id === $('#kbSelect').value);
+  const el = $('#kbPreview');
+  el.classList.toggle('hidden', !e);
+  el.textContent = e ? kbToText(e) : '';
 }
 
 /* ---------- 내보내기 ---------- */
@@ -1326,6 +1776,23 @@ $('#analyzeBtn').addEventListener('click', () => {
   renderDashboard();
 });
 $('#aiAnalyzeBtn').addEventListener('click', aiAnalyze);
+$('#runReviewBtn').addEventListener('click', () => runSecondReview());
+$('#kbSelect').addEventListener('change', renderKbPreview);
+$('#kbToggle').addEventListener('click', () => {
+  const c = $('#kbCard'); c.classList.toggle('hidden');
+  if (!c.classList.contains('hidden')) { if (state.fs) openKbFor(state.fs.company); c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+});
+$('#kbNew').addEventListener('click', () => editKb(null));
+$('#kbSave').addEventListener('click', saveKb);
+$('#kbDelete').addEventListener('click', deleteKb);
+$('#kbExport').addEventListener('click', () => download('companies.json', JSON.stringify({ companies: kb.list.map(kbPublic) }, null, 2), 'application/json'));
+$('#kbImport').addEventListener('click', () => $('#kbFile').click());
+$('#kbFile').addEventListener('change', async () => {
+  const f = $('#kbFile').files[0]; $('#kbFile').value = '';
+  if (!f) return;
+  try { const n = mergeKb(parseKbFile(await f.text()), true); saveKbStore(); renderKbList(); refreshKbSelect(); $('#kbMsg').textContent = `${n}개 회사를 가져왔습니다.`; }
+  catch (e) { $('#kbMsg').textContent = `가져오기 실패: ${e.message}`; }
+});
 $('#backBtn').addEventListener('click', () => { setStep(2); $('#reviewCard').scrollIntoView({ behavior: 'smooth' }); });
 $('#printBtn').addEventListener('click', () => window.print());
 $('#exportJson').addEventListener('click', () => {
@@ -1334,6 +1801,7 @@ $('#exportJson').addEventListener('click', () => {
     ...fs,
     ratios: analysis.ratios.map(r => ({ name: r.name, category: r.cat, values: r.values, grade: r.grade })),
     score: analysis.score, grade: analysis.grade, insights: analysis.insights, aiReport: state.aiReport || null,
+    knowledge: state.aiKnowledge || null, flags: state.aiFlags || [], secondReviews: state.aiReviews || {},
   }, null, 2), 'application/json');
 });
 $('#exportCsv').addEventListener('click', () => {
@@ -1359,7 +1827,9 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderChar
   const t = store.get('fsa.theme'); if (t) document.documentElement.dataset.theme = t;
   const k = store.get('fsa.key'); if (k) { $('#apiKey').value = k; $('#rememberKey').checked = true; }
   const m = store.get('fsa.model'); if (m) $('#modelSel').value = m;
+  const rm = store.get('fsa.reviewModel'); if (rm) $('#reviewModelSel').value = rm;
   const p = store.get('fsa.proxy'); if (p) { $('#proxyInput').value = p; $('#dartProxy').value = p; }
+  initKb();
 })();
 </script>
 </body>
